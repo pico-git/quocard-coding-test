@@ -1,0 +1,109 @@
+plugins {
+	id 'org.jetbrains.kotlin.jvm' version '1.9.25'
+	id 'org.jetbrains.kotlin.plugin.spring' version '1.9.25'
+	id 'org.springframework.boot' version '3.5.13'
+	id 'io.spring.dependency-management' version '1.1.7'
+	id 'nu.studer.jooq' version '9.0'
+	id 'org.flywaydb.flyway' version '9.22.3'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+// jOOQのバージョンを一箇所で管理
+def jooqVersion = '3.19.31'
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-jooq'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
+	implementation 'org.flywaydb:flyway-core'
+	implementation 'org.flywaydb:flyway-database-postgresql'
+	implementation 'org.jetbrains.kotlin:kotlin-reflect'
+	runtimeOnly 'org.postgresql:postgresql'
+
+	// バージョンを強制一致させる
+	implementation "org.jooq:jooq:${jooqVersion}"
+	jooqGenerator "org.postgresql:postgresql"
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.jetbrains.kotlin:kotlin-test-junit5'
+}
+
+// 重要：生成されたソースコードを Gradle に認識させる設定
+sourceSets {
+	main {
+		java {
+			srcDirs = ["src/main/kotlin", "build/generated-sources/jooq"]
+		}
+	}
+	test {
+		java {
+			srcDirs = ["src/test/kotlin"]
+		}
+	}
+}
+
+flyway {
+	url = 'jdbc:postgresql://localhost:5432/mydatabase'
+	user = 'myuser'
+	password = 'secret'
+}
+
+jooq {
+	version = jooqVersion
+
+	configurations {
+		main {
+			generationTool {
+				jdbc {
+					driver = 'org.postgresql.Driver'
+					url = 'jdbc:postgresql://localhost:5432/mydatabase'
+					user = 'myuser'
+					password = 'secret'
+				}
+				generator {
+					name = 'org.jooq.codegen.KotlinGenerator'
+					database {
+						name = 'org.jooq.meta.postgres.PostgresDatabase'
+						inputSchema = 'public'
+						excludes = 'flyway_schema_history'
+					}
+					target {
+						packageName = 'com.example.demo.jooq'
+						directory = 'build/generated-sources/jooq'
+					}
+				}
+			}
+		}
+	}
+}
+
+tasks.named('generateJooq') {
+	dependsOn tasks.named('flywayMigrate')
+}
+
+// コンパイルタスクが generateJooq の後に行われるように強制する
+tasks.named('compileKotlin') {
+	dependsOn tasks.named('generateJooq')
+}
+
+kotlin {
+	compilerOptions {
+		freeCompilerArgs.addAll '-Xjsr305=strict'
+	}
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
