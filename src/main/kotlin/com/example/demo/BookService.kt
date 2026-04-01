@@ -22,7 +22,7 @@ class BookService(private val dsl: DSLContext) {
         val bookId = dsl.insertInto(BOOK)
             .set(BOOK.TITLE, title)
             .set(BOOK.PRICE, price)
-            .set(BOOK.STATUS, 0) // 未出版
+            .set(BOOK.STATUS, BookStatus.UNPUBLISHED.code) // 未出版
             .returning(BOOK.ID)
             .fetchOne()?.id ?: throw IllegalStateException("登録に失敗しました")
 
@@ -43,13 +43,16 @@ class BookService(private val dsl: DSLContext) {
     @Transactional
     fun updateBookStatus(bookId: Int, newStatus: Int) {
         // 1. 現在のステータスを確認
-        val currentStatus = dsl.select(BOOK.STATUS)
-            .from(BOOK)
-            .where(BOOK.ID.eq(bookId))
-            .fetchOne()?.value1() ?: throw IllegalArgumentException("指定されたID（${bookId}）の書籍は見つかりません")
+        val currentStatus = BookStatus.fromCode(
+            dsl.select(BOOK.STATUS)
+                .from(BOOK)
+                .where(BOOK.ID.eq(bookId))
+                .fetchOne()?.value1()
+                ?: throw IllegalArgumentException("指定されたID（${bookId}）の書籍は見つかりません")
+        )
 
         // 要件：出版済み(1)から未出版(0)に戻すことはできない
-        if (currentStatus == 1 && newStatus == 0) {
+        if (currentStatus == BookStatus.PUBLISHED && newStatus == BookStatus.UNPUBLISHED.code) {
             throw IllegalStateException("一度出版した書籍を未出版に戻すことはできません")
         }
 
@@ -110,7 +113,7 @@ class BookService(private val dsl: DSLContext) {
                     id = requireNotNull(r.get(BOOK.ID)),
                     title = requireNotNull(r.get(BOOK.TITLE)),
                     price = requireNotNull(r.get(BOOK.PRICE)),
-                    status = requireNotNull(r.get(BOOK.STATUS))
+                    status = BookStatus.fromCode(requireNotNull(r.get(BOOK.STATUS)))
                 )
             }
 
@@ -123,5 +126,5 @@ data class BookQueryResult(
     val id: Int,
     val title: String,
     val price: Int,
-    val status: Int
+    val status: BookStatus
 )
