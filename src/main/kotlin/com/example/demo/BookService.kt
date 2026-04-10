@@ -5,7 +5,7 @@ import com.example.demo.jooq.tables.references.BOOK_AUTHOR
 import org.jooq.DSLContext
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-
+import com.example.demo.jooq.tables.references.AUTHOR
 @Service
 class BookService(private val dsl: DSLContext) {
 
@@ -15,8 +15,23 @@ class BookService(private val dsl: DSLContext) {
      */
     @Transactional
     fun registerBook(title: String, price: Int, authorIds: List<Int>): Int {
+        if (title.isBlank()) {
+            throw IllegalArgumentException("タイトルが空です")
+        }
+        if (title.length > 255) {
+            throw IllegalArgumentException("タイトルが255文字を超えています")
+        }
         if (price < 0) throw IllegalArgumentException("価格がマイナスです")
         if (authorIds.isEmpty()) throw IllegalArgumentException("著者が指定されていません")
+
+        authorIds.forEach { authorId ->
+            val existsAuthor = dsl.fetchExists(
+                dsl.selectFrom(AUTHOR).where(AUTHOR.ID.eq(authorId))
+            )
+            if (!existsAuthor) {
+                throw IllegalArgumentException("指定された著者ID ($authorId) は存在しません")
+            }
+        }
 
         // 1. 本の登録
         val bookId = dsl.insertInto(BOOK)
@@ -42,6 +57,8 @@ class BookService(private val dsl: DSLContext) {
      */
     @Transactional
     fun updateBookStatus(bookId: Int, newStatus: Int) {
+        val newStatusEnum = BookStatus.fromCode(newStatus)
+
         // 1. 現在のステータスを確認
         val currentStatus = BookStatus.fromCode(
             dsl.select(BOOK.STATUS)
@@ -52,19 +69,25 @@ class BookService(private val dsl: DSLContext) {
         )
 
         // 要件：出版済み(1)から未出版(0)に戻すことはできない
-        if (currentStatus == BookStatus.PUBLISHED && newStatus == BookStatus.UNPUBLISHED.code) {
+        if (currentStatus == BookStatus.PUBLISHED && newStatusEnum == BookStatus.UNPUBLISHED) {
             throw IllegalStateException("一度出版した書籍を未出版に戻すことはできません")
         }
 
         // 2. ステータス更新
         dsl.update(BOOK)
-            .set(BOOK.STATUS, newStatus)
+            .set(BOOK.STATUS, newStatusEnum.code)
             .where(BOOK.ID.eq(bookId))
             .execute()
     }
 
     @Transactional
     fun updateBook(bookId: Int, title: String, price: Int, authorIds: List<Int>) {
+        if (title.isBlank()) {
+            throw IllegalArgumentException("タイトルが空です")
+        }
+        if (title.length > 255) {
+            throw IllegalArgumentException("タイトルが255文字を超えています")
+        }
         if (price < 0) throw IllegalArgumentException("価格がマイナスです")
         if (authorIds.isEmpty()) throw IllegalArgumentException("著者が指定されていません")
 
@@ -73,6 +96,15 @@ class BookService(private val dsl: DSLContext) {
             dsl.selectFrom(BOOK).where(BOOK.ID.eq(bookId))
         )
         if (!exists) throw IllegalArgumentException("指定されたID（$bookId）の書籍は存在しません")
+
+        authorIds.forEach { authorId ->
+            val existsAuthor = dsl.fetchExists(
+                dsl.selectFrom(AUTHOR).where(AUTHOR.ID.eq(authorId))
+            )
+            if (!existsAuthor) {
+                throw IllegalArgumentException("指定された著者ID（$authorId）は存在しません")
+            }
+        }
 
         // 2. 書籍情報を更新
         dsl.update(BOOK)

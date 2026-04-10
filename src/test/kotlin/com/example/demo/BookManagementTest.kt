@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
+import org.springframework.dao.DataAccessException
 
 @SpringBootTest
 @Transactional
@@ -23,21 +24,233 @@ class BookManagementTest {
     @Autowired
     lateinit var dsl: DSLContext
 
-    // --- 書籍の属性・制約テスト ---
+
+    // --- 著者作成　異常系 ---
 
     @Test
-    fun `価格が0未満の場合はIllegalArgumentExceptionが発生すること`() {
-        val authorId = authorService.registerAuthor("テスト著者", LocalDate.of(1990, 1, 1))
-
+    fun `著者登録時に名前が空文字だとエラーになること`() {
         assertThrows(IllegalArgumentException::class.java) {
-            bookService.registerBook("マイナス価格の本", -1, listOf(authorId))
+            authorService.registerAuthor("", LocalDate.of(1990, 1, 1))
         }
     }
 
     @Test
-    fun `著者が0人の場合はIllegalArgumentExceptionが発生すること`() {
+    fun `著者登録時に名前が255文字を超えるとエラーになること`() {
+        val longName = "a".repeat(256)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            authorService.registerAuthor(longName, LocalDate.of(1990, 1, 1))
+        }
+    }
+
+    @Test
+    fun `著者登録時に未来日の生年月日を指定するとエラーになること`() {
+        val future = LocalDate.now().plusDays(1)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            authorService.registerAuthor("未来人", future)
+        }
+    }
+
+    // --- 著者更新　異常系 ---
+    @Test
+    fun `著者更新時に名前が空文字だとエラーになること`() {
+        val authorId = authorService.registerAuthor("名前テスト", LocalDate.of(1990, 1, 1))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            authorService.updateAuthor(
+                id = authorId,
+                name = "",
+                birthDate = LocalDate.of(1990, 1, 1)
+            )
+        }
+    }
+
+    @Test
+    fun `著者更新時に名前が255文字を超えるとエラーになること`() {
+        val authorId = authorService.registerAuthor("正常著者", LocalDate.of(1990, 1, 1))
+        val longName = "a".repeat(256)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            authorService.updateAuthor(
+                id = authorId,
+                name = longName,
+                birthDate = LocalDate.of(1990, 1, 1)
+            )
+        }
+    }
+
+    @Test
+    fun `著者更新時に未来日の生年月日を指定するとエラーになること`() {
+        val authorId = authorService.registerAuthor("未来更新テスト", LocalDate.of(1990, 1, 1))
+        val future = LocalDate.now().plusDays(1)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            authorService.updateAuthor(
+                id = authorId,
+                name = "未来人",
+                birthDate = future
+            )
+        }
+    }
+
+    @Test
+    fun `存在しない著者IDを更新しようとすると例外が発生すること`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            authorService.updateAuthor(
+                id = 99999,
+                name = "更新名",
+                birthDate = LocalDate.of(1990, 1, 1)
+            )
+        }
+    }
+
+    // --- 書籍の登録　異常系 ---
+    @Test
+    fun `書籍登録時にタイトルが空文字だとエラーになること`() {
+        val authorId = authorService.registerAuthor("著者C", LocalDate.of(1990, 1, 1))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.registerBook("", 1500, listOf(authorId))
+        }
+    }
+
+    @Test
+    fun `書籍登録時にタイトルが空白のみだとエラーになること`() {
+        val authorId = authorService.registerAuthor("著者D", LocalDate.of(1990, 1, 1))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.registerBook("   ", 1500, listOf(authorId))
+        }
+    }
+
+    @Test
+    fun `書籍登録時にタイトルが255文字を超えるとエラーになること`() {
+        val authorId = authorService.registerAuthor("著者E", LocalDate.of(1990, 1, 1))
+        val longTitle = "a".repeat(256)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.registerBook(longTitle, 1500, listOf(authorId))
+        }
+    }
+
+    @Test
+    fun `書籍登録時に価格が0未満だとエラーになること`() {
+        val authorId = authorService.registerAuthor("著者A", LocalDate.of(1990, 1, 1))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.registerBook("不正価格本", -100, listOf(authorId))
+        }
+    }
+
+    @Test
+    fun `書籍登録時に著者が0人だとエラーになること`() {
         assertThrows(IllegalArgumentException::class.java) {
             bookService.registerBook("著者なし本", 1000, emptyList())
+        }
+    }
+
+    @Test
+    fun `書籍登録時に存在しない著者IDが含まれているとエラーになること`() {
+        val validAuthor = authorService.registerAuthor("著者B", LocalDate.of(1980, 1, 1))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.registerBook("不正著者本", 1200, listOf(validAuthor, 99999))
+        }
+    }
+
+    // --- 書籍の更新　異常系 ---
+    @Test
+    fun `書籍更新時にタイトルが空文字だとエラーになること`() {
+        val authorId = authorService.registerAuthor("著者E", LocalDate.of(1990, 1, 1))
+        val bookId = bookService.registerBook("タイトルテスト", 1000, listOf(authorId))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.updateBook(bookId, "", 1500, listOf(authorId))
+        }
+    }
+
+    @Test
+    fun `書籍更新時にタイトルが空白のみだとエラーになること`() {
+        val authorId = authorService.registerAuthor("著者F", LocalDate.of(1990, 1, 1))
+        val bookId = bookService.registerBook("空白タイトル", 1000, listOf(authorId))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.updateBook(bookId, "   ", 1500, listOf(authorId))
+        }
+    }
+
+    @Test
+    fun `書籍更新時にタイトルが255文字を超えるとエラーになること`() {
+        val authorId = authorService.registerAuthor("著者G", LocalDate.of(1990, 1, 1))
+        val bookId = bookService.registerBook("長タイトル本", 1000, listOf(authorId))
+
+        val longTitle = "a".repeat(256)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.updateBook(bookId, longTitle, 1500, listOf(authorId))
+        }
+    }
+
+    @Test
+    fun `書籍更新時に価格が0未満だとエラーになること`() {
+        val authorId = authorService.registerAuthor("著者B", LocalDate.of(1990, 1, 1))
+        val bookId = bookService.registerBook("価格テスト", 1000, listOf(authorId))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.updateBook(bookId, "新タイトル", -500, listOf(authorId))
+        }
+    }
+
+    @Test
+    fun `書籍更新時に著者が0人だとエラーになること`() {
+        val authorId = authorService.registerAuthor("著者C", LocalDate.of(1990, 1, 1))
+        val bookId = bookService.registerBook("著者0テスト", 1000, listOf(authorId))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.updateBook(bookId, "更新本", 1500, emptyList())
+        }
+    }
+
+    @Test
+    fun `書籍更新時に存在しない著者IDが含まれているとエラーになること`() {
+        val a1 = authorService.registerAuthor("著者D", LocalDate.of(1980, 1, 1))
+        val bookId = bookService.registerBook("不正著者更新", 1000, listOf(a1))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.updateBook(bookId, "更新本", 1500, listOf(a1, 99999))
+        }
+    }
+
+    @Test
+    fun `書籍更新時に存在しない書籍IDを更新しようとすると例外が発生すること`() {
+        val authorId = authorService.registerAuthor("著者A", LocalDate.of(1990, 1, 1))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.updateBook(
+                bookId = 99999,
+                title = "更新本",
+                price = 1200,
+                authorIds = listOf(authorId)
+            )
+        }
+    }
+
+    // --- 書籍の出版状況更新　異常系 ---
+    @Test
+    fun `存在しない書籍IDのステータス更新は例外が発生すること`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.updateBookStatus(99999, 1)
+        }
+    }
+
+    @Test
+    fun `ステータスが0と1以外の場合はIllegalArgumentExceptionが発生すること`() {
+        val authorId = authorService.registerAuthor("著者X", LocalDate.of(1990, 1, 1))
+        val bookId = bookService.registerBook("ステータス不正本", 1000, listOf(authorId))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            bookService.updateBookStatus(bookId, 999)
         }
     }
 
@@ -57,15 +270,6 @@ class BookManagementTest {
         }
     }
 
-    // --- 著者の属性・制約テスト ---
-
-    @Test
-    fun `未来の生年月日の著者は登録できないこと`() {
-        val futureDate = LocalDate.now().plusDays(1)
-        assertThrows(IllegalArgumentException::class.java) {
-            authorService.registerAuthor("未来人", futureDate)
-        }
-    }
 
     // --- 正常系動作確認 ---
 
@@ -97,15 +301,7 @@ class BookManagementTest {
         assertEquals(2000, updated.price)
     }
 
-    @Test
-    fun `書籍更新時に著者が0人だとエラーになること`() {
-        val authorId = authorService.registerAuthor("著者A", LocalDate.of(1980, 1, 1))
-        val bookId = bookService.registerBook("テスト本", 1200, listOf(authorId))
 
-        assertThrows(IllegalArgumentException::class.java) {
-            bookService.updateBook(bookId, "更新本", 1500, emptyList())
-        }
-    }
 
     @Test
     fun `書籍に複数の著者を登録できること`() {
@@ -148,5 +344,39 @@ class BookManagementTest {
             .fetchOne(BOOK.STATUS)
 
         assertEquals(1, status)
+    }
+
+    @Test
+    fun `書籍更新時に著者を入れ替えられること`() {
+        val a1 = authorService.registerAuthor("著者1", LocalDate.of(1970, 1, 1))
+        val a2 = authorService.registerAuthor("著者2", LocalDate.of(1980, 1, 1))
+        val a3 = authorService.registerAuthor("著者3", LocalDate.of(1990, 1, 1))
+
+        val bookId = bookService.registerBook("入れ替え本", 1500, listOf(a1, a2))
+
+        bookService.updateBook(bookId, "入れ替え本", 1500, listOf(a3))
+
+        val authors = dsl.select(BOOK_AUTHOR.AUTHOR_ID)
+            .from(BOOK_AUTHOR)
+            .where(BOOK_AUTHOR.BOOK_ID.eq(bookId))
+            .fetch()
+            .map { it.value1() }
+
+        assertEquals(setOf(a3), authors.toSet())
+    }
+
+    @Test
+    fun `書籍が存在しない著者を検索した場合は空リストが返ること`() {
+        val authorId = authorService.registerAuthor("空著者", LocalDate.of(1990, 1, 1))
+
+        val results = bookService.findBooksByAuthor(authorId)
+
+        assertTrue(results.isEmpty())
+    }
+
+    @Test
+    fun `存在しない著者IDで検索した場合は空リストが返ること`() {
+        val results = bookService.findBooksByAuthor(99999)
+        assertTrue(results.isEmpty())
     }
 }

@@ -15,6 +15,12 @@ class AuthorService(private val dsl: DSLContext) {
      */
     @Transactional
     fun registerAuthor(name: String, birthDate: LocalDate): Int { // 戻り値の型を Int に指定
+        if (name.isBlank()) {
+            throw IllegalArgumentException("名前が空です")
+        }
+        if (name.length > 255) {
+            throw IllegalArgumentException("名前が255文字を超えています")
+        }
         // 要件：生年月日は現在日以前であること
         if (birthDate.isAfter(LocalDate.now())) {
             throw IllegalArgumentException("生年月日に未来の日付は指定できません")
@@ -34,6 +40,12 @@ class AuthorService(private val dsl: DSLContext) {
      */
     @Transactional
     fun updateAuthor(id: Int, name: String, birthDate: LocalDate) {
+        if (name.isBlank()) {
+            throw IllegalArgumentException("名前が空です")
+        }
+        if (name.length > 255) {
+            throw IllegalArgumentException("名前が255文字を超えています")
+        }
         if (birthDate.isAfter(LocalDate.now())) {
             throw IllegalArgumentException("生年月日に未来の日付は指定できません")
         }
